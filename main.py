@@ -23,6 +23,7 @@ OW_KEY = os.getenv("OPENWEATHER_API_KEY","")
 CF_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID","")
 CF_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN","")
 CF_MODEL = os.getenv("CLOUDFLARE_MODEL","@cf/black-forest-labs/flux-1-schnell")
+CESIUM_ION_TOKEN = os.getenv("CESIUM_ION_TOKEN", "").strip()
 
 CARS = [
  {"id":"coupe","name":"Sports Coupe","category":"Sport","color":"#e45d59","model_url":"https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/GroundVehicle/GroundVehicle.glb"},
@@ -41,20 +42,27 @@ class Sky(BaseModel):
     season: str = "unknown"
     local_time: str = "day"
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={}
-    )
+    return templates.TemplateResponse("index.html", {"request":request})
 @app.get("/health")
 async def health(): return {"status":"ok","service":"roadworld-earth-drive"}
 @app.get("/api/config")
 async def config():
-    return {"status":"ok","mongodb_configured":DB is not None,"openweather_configured":bool(OW_KEY),"cloudflare_configured":bool(CF_ID and CF_TOKEN)}
+    return {"status":"ok","mongodb_configured":DB is not None,"openweather_configured":bool(OW_KEY),"cloudflare_configured":bool(CF_ID and CF_TOKEN),"cesium_token_configured":bool(CESIUM_ION_TOKEN)}
 @app.get("/api/cars")
 async def cars(): return {"cars":CARS}
+
+@app.get("/api/cesium-token")
+async def cesium_token():
+    """Return a browser-scoped Cesium ion token stored in Render Environment.
+
+    Configure a dedicated, restricted client token in CESIUM_ION_TOKEN; never put
+    an account/admin secret here because browser users can inspect this response.
+    """
+    if not CESIUM_ION_TOKEN:
+        raise HTTPException(503, "CESIUM_ION_TOKEN is not configured in Render Environment")
+    return {"token": CESIUM_ION_TOKEN, "configured": True}
 @app.get("/api/profile/{player_id}")
 async def get_profile(player_id:str):
     if DB is not None:
@@ -104,3 +112,4 @@ async def plate(lat:float,lon:float):
     letters=lambda n:"".join(random.choices("ABCDEFGHJKLMNPRSTUVWXYZ",k=n))
     patterns={"IL":lambda:f"{random.randint(10,99)}-{random.randint(100,999)}-{random.randint(10,99)}","US":lambda:f"{letters(3)}-{random.randint(1000,9999)}","GB":lambda:f"{letters(2)}{random.randint(10,99)} {letters(3)}","DE":lambda:f"{letters(2)} {random.randint(100,9999)}","FR":lambda:f"{letters(2)}-{random.randint(100,999)}-{letters(2)}"}
     return {"country_code":country,"plate":patterns.get(country,lambda:f"{country} {random.randint(1000,9999)}")()}
+    
